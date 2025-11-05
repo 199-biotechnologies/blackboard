@@ -210,7 +210,7 @@ export default function Editor() {
           transform: translateY(0) !important;
         }
 
-        /* Fix drag handle and + button vertical alignment */
+        /* Fix drag handle and + button vertical alignment for all blocks */
         .bn-container [data-node-type="block-outer"] {
           display: flex !important;
           align-items: flex-start !important;
@@ -219,8 +219,14 @@ export default function Editor() {
         .bn-side-menu {
           display: flex !important;
           align-items: center !important;
-          height: 2rem !important;
-          margin-top: 0.8rem !important;
+          align-self: flex-start !important;
+          margin-top: 0.5rem !important;
+        }
+
+        /* Adjust side menu position for headings */
+        [data-content-type="heading"] + .bn-side-menu,
+        [data-content-type="heading"] ~ .bn-side-menu {
+          margin-top: 1rem !important;
         }
 
         .bn-side-menu button {
@@ -232,6 +238,12 @@ export default function Editor() {
         .bn-drag-handle-menu {
           display: flex !important;
           align-items: center !important;
+        }
+
+        /* Ensure block content and side menu are aligned */
+        .bn-block-outer {
+          display: flex !important;
+          align-items: flex-start !important;
         }
       `}</style>
       <div
