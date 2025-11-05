@@ -1,71 +1,136 @@
 'use client'
 
-import { useState, useRef, KeyboardEvent } from 'react'
+import { useState, useRef, KeyboardEvent, useEffect } from 'react'
+
+type Command = {
+  trigger: string
+  replacement: string
+  label: string
+  description: string
+}
+
+const COMMANDS: Command[] = [
+  { trigger: '/todo', replacement: '☐ ', label: '/todo', description: 'Add a checkbox' },
+  { trigger: '/h1', replacement: '# ', label: '/h1', description: 'Large heading' },
+  { trigger: '/h2', replacement: '## ', label: '/h2', description: 'Medium heading' },
+  { trigger: '/h3', replacement: '### ', label: '/h3', description: 'Small heading' },
+]
 
 export default function Home() {
-  const [content, setContent] = useState('')
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [showMenu, setShowMenu] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
+  const editorRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    const textarea = textareaRef.current
-    if (!textarea) return
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
 
-    const cursorPos = textarea.selectionStart
-    const selectionEnd = textarea.selectionEnd
-    const textBefore = content.substring(0, cursorPos)
-    const textAfter = content.substring(selectionEnd)
-    const selectedText = content.substring(cursorPos, selectionEnd)
+    const handleInput = () => {
+      const selection = window.getSelection()
+      if (!selection || !selection.rangeCount) return
 
-    // Handle Space key for commands
-    if (e.key === ' ') {
-      const lines = textBefore.split('\n')
-      const currentLine = lines[lines.length - 1]
+      const range = selection.getRangeAt(0)
+      const textNode = range.startContainer
 
-      // /todo command
-      if (currentLine === '/todo') {
+      if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
+        const text = textNode.textContent
+        const offset = range.startOffset
+
+        // Find the start of the current line
+        const beforeCursor = text.substring(0, offset)
+        const lineStart = beforeCursor.lastIndexOf('\n') + 1
+        const currentLine = text.substring(lineStart, offset)
+
+        // Show menu if line starts with "/"
+        if (currentLine.startsWith('/') && currentLine.length > 0) {
+          const rect = range.getBoundingClientRect()
+          setMenuPosition({
+            top: rect.bottom + window.scrollY + 8,
+            left: rect.left + window.scrollX
+          })
+          setShowMenu(true)
+        } else {
+          setShowMenu(false)
+          setSelectedIndex(0)
+        }
+      } else {
+        setShowMenu(false)
+        setSelectedIndex(0)
+      }
+    }
+
+    editor.addEventListener('input', handleInput)
+    return () => editor.removeEventListener('input', handleInput)
+  }, [])
+
+  const executeCommand = (command: Command) => {
+    const editor = editorRef.current
+    if (!editor) return
+
+    const selection = window.getSelection()
+    if (!selection || !selection.rangeCount) return
+
+    const range = selection.getRangeAt(0)
+    const textNode = range.startContainer
+
+    if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
+      const text = textNode.textContent
+      const offset = range.startOffset
+
+      // Find the start of the current line and the command
+      const beforeCursor = text.substring(0, offset)
+      const lineStart = beforeCursor.lastIndexOf('\n') + 1
+      const afterLineStart = text.substring(lineStart)
+
+      // Replace the command with its replacement
+      const commandIndex = afterLineStart.indexOf(command.trigger)
+      if (commandIndex !== -1) {
+        const newText =
+          text.substring(0, lineStart + commandIndex) +
+          command.replacement +
+          text.substring(lineStart + commandIndex + command.trigger.length)
+
+        textNode.textContent = newText
+
+        // Set cursor position after replacement
+        const newOffset = lineStart + commandIndex + command.replacement.length
+        range.setStart(textNode, newOffset)
+        range.setEnd(textNode, newOffset)
+      }
+    }
+
+    setShowMenu(false)
+    setSelectedIndex(0)
+    editor.focus()
+  }
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const editor = editorRef.current
+    if (!editor) return
+
+    // Handle menu navigation
+    if (showMenu) {
+      if (e.key === 'ArrowDown') {
         e.preventDefault()
-        const newText = textBefore.substring(0, textBefore.lastIndexOf('/todo')) + '☐ ' + textAfter
-        setContent(newText)
-        setTimeout(() => {
-          const newPos = textBefore.lastIndexOf('/todo') + 2
-          textarea.selectionStart = textarea.selectionEnd = newPos
-        }, 0)
+        setSelectedIndex((prev) => (prev + 1) % COMMANDS.length)
         return
       }
-
-      // /h1 command
-      if (currentLine === '/h1') {
+      if (e.key === 'ArrowUp') {
         e.preventDefault()
-        const newText = textBefore.substring(0, textBefore.lastIndexOf('/h1')) + '# ' + textAfter
-        setContent(newText)
-        setTimeout(() => {
-          const newPos = textBefore.lastIndexOf('/h1') + 2
-          textarea.selectionStart = textarea.selectionEnd = newPos
-        }, 0)
+        setSelectedIndex((prev) => (prev - 1 + COMMANDS.length) % COMMANDS.length)
         return
       }
-
-      // /h2 command
-      if (currentLine === '/h2') {
+      if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault()
-        const newText = textBefore.substring(0, textBefore.lastIndexOf('/h2')) + '## ' + textAfter
-        setContent(newText)
-        setTimeout(() => {
-          const newPos = textBefore.lastIndexOf('/h2') + 3
-          textarea.selectionStart = textarea.selectionEnd = newPos
-        }, 0)
+        executeCommand(COMMANDS[selectedIndex])
         return
       }
-
-      // /h3 command
-      if (currentLine === '/h3') {
+      if (e.key === 'Escape') {
         e.preventDefault()
-        const newText = textBefore.substring(0, textBefore.lastIndexOf('/h3')) + '### ' + textAfter
-        setContent(newText)
-        setTimeout(() => {
-          const newPos = textBefore.lastIndexOf('/h3') + 4
-          textarea.selectionStart = textarea.selectionEnd = newPos
-        }, 0)
+        setShowMenu(false)
+        setSelectedIndex(0)
         return
       }
     }
@@ -73,86 +138,83 @@ export default function Home() {
     // Handle Ctrl/Cmd + B for bold
     if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
       e.preventDefault()
-      if (selectedText) {
-        const newText = textBefore + '**' + selectedText + '**' + textAfter
-        setContent(newText)
-        setTimeout(() => {
-          textarea.selectionStart = cursorPos + 2
-          textarea.selectionEnd = selectionEnd + 2
-        }, 0)
-      }
+      document.execCommand('bold', false)
       return
     }
 
     // Handle Ctrl/Cmd + I for italic
     if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
       e.preventDefault()
-      if (selectedText) {
-        const newText = textBefore + '*' + selectedText + '*' + textAfter
-        setContent(newText)
-        setTimeout(() => {
-          textarea.selectionStart = cursorPos + 1
-          textarea.selectionEnd = selectionEnd + 1
-        }, 0)
-      }
+      document.execCommand('italic', false)
       return
     }
 
     // Handle Ctrl/Cmd + U for underline
     if ((e.ctrlKey || e.metaKey) && e.key === 'u') {
       e.preventDefault()
-      if (selectedText) {
-        const newText = textBefore + '__' + selectedText + '__' + textAfter
-        setContent(newText)
-        setTimeout(() => {
-          textarea.selectionStart = cursorPos + 2
-          textarea.selectionEnd = selectionEnd + 2
-        }, 0)
-      }
+      document.execCommand('underline', false)
       return
     }
 
-    // Handle Enter key
+    // Handle Enter key for checkboxes
     if (e.key === 'Enter') {
-      const lines = textBefore.split('\n')
-      const currentLine = lines[lines.length - 1]
+      const selection = window.getSelection()
+      if (!selection || !selection.rangeCount) return
 
-      // Check if we're on a line with a checkbox
+      const range = selection.getRangeAt(0)
+      const container = range.startContainer
+      const textContent = container.textContent || ''
+
+      // Check if current line has a checkbox
+      const beforeCursor = textContent.substring(0, range.startOffset)
+      const lineStart = beforeCursor.lastIndexOf('\n') + 1
+      const currentLine = textContent.substring(lineStart, range.startOffset)
+
       if (currentLine.trim().startsWith('☐') || currentLine.trim().startsWith('☑')) {
         e.preventDefault()
-        const newText = textBefore + '\n☐ ' + textAfter
-        setContent(newText)
-
-        setTimeout(() => {
-          const newPos = cursorPos + 3
-          textarea.selectionStart = textarea.selectionEnd = newPos
-        }, 0)
+        document.execCommand('insertText', false, '\n☐ ')
         return
       }
     }
 
-    // Toggle checkbox on current line with Cmd/Ctrl + Enter
+    // Handle Ctrl/Cmd + Enter to toggle checkbox
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
-      const lines = textBefore.split('\n')
-      const currentLineIndex = lines.length - 1
-      const currentLine = lines[currentLineIndex]
+      const selection = window.getSelection()
+      if (!selection || !selection.rangeCount) return
 
-      let newLine = currentLine
-      if (currentLine.includes('☐')) {
-        newLine = currentLine.replace('☐', '☑')
-      } else if (currentLine.includes('☑')) {
-        newLine = currentLine.replace('☑', '☐')
+      const range = selection.getRangeAt(0)
+      const textNode = range.startContainer
+
+      if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
+        const text = textNode.textContent
+        const offset = range.startOffset
+
+        // Find the current line
+        const beforeCursor = text.substring(0, offset)
+        const afterCursor = text.substring(offset)
+        const lineStart = beforeCursor.lastIndexOf('\n') + 1
+        const lineEnd = afterCursor.indexOf('\n')
+        const actualLineEnd = lineEnd === -1 ? text.length : offset + lineEnd
+
+        const currentLine = text.substring(lineStart, actualLineEnd)
+
+        let newLine = currentLine
+        if (currentLine.includes('☐')) {
+          newLine = currentLine.replace('☐', '☑')
+        } else if (currentLine.includes('☑')) {
+          newLine = currentLine.replace('☑', '☐')
+        }
+
+        if (newLine !== currentLine) {
+          const newText = text.substring(0, lineStart) + newLine + text.substring(actualLineEnd)
+          textNode.textContent = newText
+
+          // Restore cursor position
+          range.setStart(textNode, offset)
+          range.setEnd(textNode, offset)
+        }
       }
-
-      const linesBeforeCurrent = lines.slice(0, currentLineIndex).join('\n')
-      const prefix = linesBeforeCurrent ? linesBeforeCurrent + '\n' : ''
-      const newText = prefix + newLine + textAfter
-      setContent(newText)
-
-      setTimeout(() => {
-        textarea.selectionStart = textarea.selectionEnd = cursorPos
-      }, 0)
     }
   }
 
@@ -163,14 +225,14 @@ export default function Home() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '2rem'
+      padding: '2rem',
+      position: 'relative'
     }}>
-      <textarea
-        ref={textareaRef}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
+      <div
+        ref={editorRef}
+        contentEditable
         onKeyDown={handleKeyDown}
-        placeholder="Start typing... (/todo /h1 /h2 /h3 + space | Ctrl+B/I/U)"
+        suppressContentEditableWarning
         style={{
           width: '100%',
           height: '100%',
@@ -178,12 +240,64 @@ export default function Home() {
           lineHeight: '1.6',
           border: 'none',
           outline: 'none',
-          resize: 'none',
           background: 'transparent',
           fontFamily: 'inherit',
-          color: '#2c2416'
+          color: '#2c2416',
+          whiteSpace: 'pre-wrap',
+          wordWrap: 'break-word',
+          overflowY: 'auto'
         }}
+        data-placeholder="Start typing..."
       />
+
+      {showMenu && (
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: `${menuPosition.top}px`,
+            left: `${menuPosition.left}px`,
+            background: '#fff',
+            border: '2px solid #2c2416',
+            borderRadius: '8px',
+            padding: '8px',
+            boxShadow: '0 4px 12px rgba(44, 36, 22, 0.15)',
+            zIndex: 1000,
+            minWidth: '280px',
+          }}
+        >
+          {COMMANDS.map((command, index) => (
+            <div
+              key={command.trigger}
+              onClick={() => executeCommand(command)}
+              style={{
+                padding: '12px 16px',
+                cursor: 'pointer',
+                background: index === selectedIndex ? '#f5f1e8' : 'transparent',
+                borderRadius: '4px',
+                marginBottom: index < COMMANDS.length - 1 ? '4px' : '0',
+                transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={() => setSelectedIndex(index)}
+            >
+              <div style={{
+                fontSize: '1.1rem',
+                fontWeight: 600,
+                color: '#2c2416',
+                marginBottom: '2px',
+              }}>
+                {command.label}
+              </div>
+              <div style={{
+                fontSize: '0.9rem',
+                color: '#6b5d4f',
+              }}>
+                {command.description}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

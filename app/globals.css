@@ -12,3 +12,10 @@ html, body {
 body {
   overflow: hidden;
 }
+
+[contenteditable][data-placeholder]:empty:before {
+  content: attr(data-placeholder);
+  color: #a89f91;
+  pointer-events: none;
+  position: absolute;
+}
