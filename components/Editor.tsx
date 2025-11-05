@@ -1,8 +1,8 @@
 'use client'
 
-import { useCreateBlockNote, filterSuggestionItems } from '@blocknote/react'
+import { useCreateBlockNote } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
-import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core'
+import { BlockNoteSchema, defaultBlockSpecs, filterSuggestionItems } from '@blocknote/core'
 import '@blocknote/core/fonts/inter.css'
 import '@blocknote/mantine/style.css'
 import { SuggestionMenuController } from '@blocknote/react'
