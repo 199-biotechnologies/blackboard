@@ -248,7 +248,7 @@ export default function Editor() {
       `}</style>
       <div
         style={{
-          maxWidth: '900px',
+          maxWidth: '1035px',
           margin: '0 auto',
         }}
       >
