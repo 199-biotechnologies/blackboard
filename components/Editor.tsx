@@ -98,6 +98,7 @@ export default function Editor() {
              !title.includes('audio') &&
              !title.includes('file') &&
              !title.includes('table') &&
+             !title.includes('code') &&
              !title.includes('heading 4') &&
              !title.includes('heading 5') &&
              !title.includes('heading 6')
