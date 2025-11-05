@@ -73,8 +73,8 @@ export default function Editor() {
     }
   }, [editor])
 
-  const getCustomSlashMenuItems = (editor: typeof editor) => {
-    const defaultItems = getDefaultReactSlashMenuItems(editor)
+  const getCustomSlashMenuItems = (editorInstance: any) => {
+    const defaultItems = getDefaultReactSlashMenuItems(editorInstance)
 
     // Filter out unwanted items
     return defaultItems.filter((item) => {
