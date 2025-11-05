@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, KeyboardEvent, useEffect } from 'react'
+import { useState, useRef, KeyboardEvent, MouseEvent } from 'react'
 
 type Command = {
   trigger: string
@@ -23,87 +23,157 @@ export default function Home() {
   const editorRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const editor = editorRef.current
-    if (!editor) return
-
-    const handleInput = () => {
-      const selection = window.getSelection()
-      if (!selection || !selection.rangeCount) return
-
-      const range = selection.getRangeAt(0)
-      const textNode = range.startContainer
-
-      if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
-        const text = textNode.textContent
-        const offset = range.startOffset
-
-        // Find the start of the current line
-        const beforeCursor = text.substring(0, offset)
-        const lineStart = beforeCursor.lastIndexOf('\n') + 1
-        const currentLine = text.substring(lineStart, offset)
-
-        // Show menu if line starts with "/"
-        if (currentLine.startsWith('/') && currentLine.length > 0) {
-          const rect = range.getBoundingClientRect()
-          setMenuPosition({
-            top: rect.bottom + window.scrollY + 8,
-            left: rect.left + window.scrollX
-          })
-          setShowMenu(true)
-        } else {
-          setShowMenu(false)
-          setSelectedIndex(0)
-        }
-      } else {
-        setShowMenu(false)
-        setSelectedIndex(0)
-      }
-    }
-
-    editor.addEventListener('input', handleInput)
-    return () => editor.removeEventListener('input', handleInput)
-  }, [])
-
-  const executeCommand = (command: Command) => {
-    const editor = editorRef.current
-    if (!editor) return
-
+  const getCurrentLineInfo = () => {
     const selection = window.getSelection()
-    if (!selection || !selection.rangeCount) return
+    if (!selection || !selection.rangeCount) return null
 
     const range = selection.getRangeAt(0)
-    const textNode = range.startContainer
+    const editor = editorRef.current
+    if (!editor) return null
 
-    if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
-      const text = textNode.textContent
-      const offset = range.startOffset
+    // Get all text content
+    const fullText = editor.textContent || ''
 
-      // Find the start of the current line and the command
-      const beforeCursor = text.substring(0, offset)
-      const lineStart = beforeCursor.lastIndexOf('\n') + 1
-      const afterLineStart = text.substring(lineStart)
+    // Find cursor position in full text
+    const preCaretRange = range.cloneRange()
+    preCaretRange.selectNodeContents(editor)
+    preCaretRange.setEnd(range.endContainer, range.endOffset)
+    const caretOffset = preCaretRange.toString().length
 
-      // Replace the command with its replacement
-      const commandIndex = afterLineStart.indexOf(command.trigger)
-      if (commandIndex !== -1) {
-        const newText =
-          text.substring(0, lineStart + commandIndex) +
-          command.replacement +
-          text.substring(lineStart + commandIndex + command.trigger.length)
+    // Find current line
+    const textBeforeCursor = fullText.substring(0, caretOffset)
+    const lastNewline = textBeforeCursor.lastIndexOf('\n')
+    const lineStart = lastNewline + 1
+    const textAfterCursor = fullText.substring(caretOffset)
+    const nextNewline = textAfterCursor.indexOf('\n')
+    const lineEnd = nextNewline === -1 ? fullText.length : caretOffset + nextNewline
 
-        textNode.textContent = newText
+    const currentLine = fullText.substring(lineStart, caretOffset)
 
-        // Set cursor position after replacement
-        const newOffset = lineStart + commandIndex + command.replacement.length
-        range.setStart(textNode, newOffset)
-        range.setEnd(textNode, newOffset)
+    return {
+      fullText,
+      caretOffset,
+      lineStart,
+      lineEnd,
+      currentLine,
+      range
+    }
+  }
+
+  const replaceCurrentCommand = (command: Command) => {
+    const editor = editorRef.current
+    if (!editor) return
+
+    const lineInfo = getCurrentLineInfo()
+    if (!lineInfo) return
+
+    const { currentLine, lineStart, caretOffset } = lineInfo
+
+    const commandIndex = currentLine.lastIndexOf(command.trigger)
+    if (commandIndex === -1) return
+
+    const selection = window.getSelection()
+    if (!selection) return
+
+    // Create range to select the command text
+    const range = document.createRange()
+
+    // Find the actual position in the DOM
+    const commandStartOffset = lineStart + commandIndex
+    const commandEndOffset = commandStartOffset + command.trigger.length
+
+    // Walk through the text nodes to find the right position
+    let currentOffset = 0
+    let startNode: Node | null = null
+    let startOffset = 0
+    let endNode: Node | null = null
+    let endOffset = 0
+
+    const walker = document.createTreeWalker(
+      editor,
+      NodeFilter.SHOW_TEXT,
+      null
+    )
+
+    let node: Node | null
+    while ((node = walker.nextNode())) {
+      const nodeLength = node.textContent?.length || 0
+
+      if (startNode === null && currentOffset + nodeLength > commandStartOffset) {
+        startNode = node
+        startOffset = commandStartOffset - currentOffset
       }
+
+      if (endNode === null && currentOffset + nodeLength >= commandEndOffset) {
+        endNode = node
+        endOffset = commandEndOffset - currentOffset
+        break
+      }
+
+      currentOffset += nodeLength
+    }
+
+    if (startNode && endNode) {
+      range.setStart(startNode, startOffset)
+      range.setEnd(endNode, endOffset)
+      selection.removeAllRanges()
+      selection.addRange(range)
+
+      // Use execCommand to maintain undo history
+      document.execCommand('insertText', false, command.replacement)
     }
 
     setShowMenu(false)
     setSelectedIndex(0)
     editor.focus()
+  }
+
+  const checkForSlashCommand = () => {
+    const lineInfo = getCurrentLineInfo()
+    if (!lineInfo) {
+      setShowMenu(false)
+      return
+    }
+
+    const { currentLine, range } = lineInfo
+
+    // Show menu if line starts with "/"
+    if (currentLine.startsWith('/') && currentLine.length > 0) {
+      const rect = range.getBoundingClientRect()
+      setMenuPosition({
+        top: rect.bottom + window.scrollY + 8,
+        left: rect.left + window.scrollX
+      })
+      setShowMenu(true)
+    } else {
+      setShowMenu(false)
+      setSelectedIndex(0)
+    }
+  }
+
+  const handleInput = () => {
+    checkForSlashCommand()
+  }
+
+  const handleClick = (e: MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement
+    const text = target.textContent || ''
+
+    // Check if clicked on a checkbox
+    if (text === '☐' || text === '☑') {
+      e.preventDefault()
+      const newText = text === '☐' ? '☑' : '☐'
+
+      // Replace the checkbox
+      const selection = window.getSelection()
+      if (selection) {
+        const range = document.createRange()
+        range.selectNodeContents(target)
+        selection.removeAllRanges()
+        selection.addRange(range)
+        document.execCommand('insertText', false, newText)
+      }
+    }
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -124,7 +194,7 @@ export default function Home() {
       }
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault()
-        executeCommand(COMMANDS[selectedIndex])
+        replaceCurrentCommand(COMMANDS[selectedIndex])
         return
       }
       if (e.key === 'Escape') {
@@ -158,17 +228,10 @@ export default function Home() {
 
     // Handle Enter key for checkboxes
     if (e.key === 'Enter') {
-      const selection = window.getSelection()
-      if (!selection || !selection.rangeCount) return
+      const lineInfo = getCurrentLineInfo()
+      if (!lineInfo) return
 
-      const range = selection.getRangeAt(0)
-      const container = range.startContainer
-      const textContent = container.textContent || ''
-
-      // Check if current line has a checkbox
-      const beforeCursor = textContent.substring(0, range.startOffset)
-      const lineStart = beforeCursor.lastIndexOf('\n') + 1
-      const currentLine = textContent.substring(lineStart, range.startOffset)
+      const { currentLine } = lineInfo
 
       if (currentLine.trim().startsWith('☐') || currentLine.trim().startsWith('☑')) {
         e.preventDefault()
@@ -180,42 +243,96 @@ export default function Home() {
     // Handle Ctrl/Cmd + Enter to toggle checkbox
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
-      const selection = window.getSelection()
-      if (!selection || !selection.rangeCount) return
+      const lineInfo = getCurrentLineInfo()
+      if (!lineInfo) return
 
-      const range = selection.getRangeAt(0)
-      const textNode = range.startContainer
+      const { fullText, lineStart, lineEnd } = lineInfo
+      const currentLine = fullText.substring(lineStart, lineEnd)
 
-      if (textNode.nodeType === Node.TEXT_NODE && textNode.textContent) {
-        const text = textNode.textContent
-        const offset = range.startOffset
+      if (currentLine.includes('☐') || currentLine.includes('☑')) {
+        const selection = window.getSelection()
+        if (!selection) return
 
-        // Find the current line
-        const beforeCursor = text.substring(0, offset)
-        const afterCursor = text.substring(offset)
-        const lineStart = beforeCursor.lastIndexOf('\n') + 1
-        const lineEnd = afterCursor.indexOf('\n')
-        const actualLineEnd = lineEnd === -1 ? text.length : offset + lineEnd
+        // Find and select the checkbox in the current line
+        const checkboxOffset = currentLine.indexOf('☐') !== -1
+          ? currentLine.indexOf('☐')
+          : currentLine.indexOf('☑')
 
-        const currentLine = text.substring(lineStart, actualLineEnd)
+        if (checkboxOffset !== -1) {
+          const absoluteOffset = lineStart + checkboxOffset
 
-        let newLine = currentLine
-        if (currentLine.includes('☐')) {
-          newLine = currentLine.replace('☐', '☑')
-        } else if (currentLine.includes('☑')) {
-          newLine = currentLine.replace('☑', '☐')
-        }
+          // Walk through text nodes to find the checkbox
+          let currentOffset = 0
+          const walker = document.createTreeWalker(
+            editor,
+            NodeFilter.SHOW_TEXT,
+            null
+          )
 
-        if (newLine !== currentLine) {
-          const newText = text.substring(0, lineStart) + newLine + text.substring(actualLineEnd)
-          textNode.textContent = newText
+          let node: Node | null
+          while ((node = walker.nextNode())) {
+            const nodeLength = node.textContent?.length || 0
 
-          // Restore cursor position
-          range.setStart(textNode, offset)
-          range.setEnd(textNode, offset)
+            if (currentOffset + nodeLength > absoluteOffset) {
+              const localOffset = absoluteOffset - currentOffset
+              const range = document.createRange()
+              range.setStart(node, localOffset)
+              range.setEnd(node, localOffset + 1)
+              selection.removeAllRanges()
+              selection.addRange(range)
+
+              const currentChar = node.textContent?.charAt(localOffset)
+              const newChar = currentChar === '☐' ? '☑' : '☐'
+              document.execCommand('insertText', false, newChar)
+              break
+            }
+
+            currentOffset += nodeLength
+          }
         }
       }
     }
+  }
+
+  const exportToMarkdown = () => {
+    const editor = editorRef.current
+    if (!editor) return
+
+    const htmlContent = editor.innerHTML
+
+    // Convert HTML to markdown-like format
+    let markdown = htmlContent
+      // Bold
+      .replace(/<b>(.*?)<\/b>/g, '**$1**')
+      .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
+      // Italic
+      .replace(/<i>(.*?)<\/i>/g, '*$1*')
+      .replace(/<em>(.*?)<\/em>/g, '*$1*')
+      // Underline
+      .replace(/<u>(.*?)<\/u>/g, '__$1__')
+      // Line breaks
+      .replace(/<div>/g, '\n')
+      .replace(/<\/div>/g, '')
+      .replace(/<br>/g, '\n')
+      // Remove remaining HTML tags
+      .replace(/<[^>]*>/g, '')
+      // Decode HTML entities
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim()
+
+    // Create download
+    const blob = new Blob([markdown], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `blackboard-${new Date().toISOString().slice(0, 10)}.md`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -231,6 +348,8 @@ export default function Home() {
       <div
         ref={editorRef}
         contentEditable
+        onInput={handleInput}
+        onClick={handleClick}
         onKeyDown={handleKeyDown}
         suppressContentEditableWarning
         style={{
@@ -269,7 +388,7 @@ export default function Home() {
           {COMMANDS.map((command, index) => (
             <div
               key={command.trigger}
-              onClick={() => executeCommand(command)}
+              onClick={() => replaceCurrentCommand(command)}
               style={{
                 padding: '12px 16px',
                 cursor: 'pointer',
@@ -298,6 +417,36 @@ export default function Home() {
           ))}
         </div>
       )}
+
+      <button
+        onClick={exportToMarkdown}
+        style={{
+          position: 'fixed',
+          bottom: '2rem',
+          right: '2rem',
+          padding: '12px 24px',
+          background: '#fff',
+          border: '2px solid #2c2416',
+          borderRadius: '8px',
+          fontSize: '1rem',
+          fontWeight: 600,
+          color: '#2c2416',
+          cursor: 'pointer',
+          boxShadow: '0 2px 8px rgba(44, 36, 22, 0.1)',
+          transition: 'all 0.2s ease',
+          fontFamily: 'inherit',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-2px)'
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(44, 36, 22, 0.2)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.boxShadow = '0 2px 8px rgba(44, 36, 22, 0.1)'
+        }}
+      >
+        Export MD
+      </button>
     </div>
   )
 }
