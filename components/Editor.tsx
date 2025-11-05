@@ -19,26 +19,12 @@ export default function Editor() {
     video,
     file,
     table,
-    heading: defaultHeading,
     ...remainingBlockSpecs
   } = defaultBlockSpecs
-
-  // Create custom heading that only allows h1, h2, h3
-  const customHeading = {
-    ...defaultHeading,
-    propSchema: {
-      ...defaultHeading.propSchema,
-      level: {
-        default: 1,
-        values: [1, 2, 3] as const,
-      },
-    },
-  }
 
   const schema = BlockNoteSchema.create({
     blockSpecs: {
       ...remainingBlockSpecs,
-      heading: customHeading,
     },
   })
 
