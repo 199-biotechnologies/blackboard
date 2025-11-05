@@ -209,6 +209,30 @@ export default function Editor() {
           flex-shrink: 0 !important;
           transform: translateY(0) !important;
         }
+
+        /* Fix drag handle and + button vertical alignment */
+        .bn-container [data-node-type="block-outer"] {
+          display: flex !important;
+          align-items: flex-start !important;
+        }
+
+        .bn-side-menu {
+          display: flex !important;
+          align-items: center !important;
+          height: 2rem !important;
+          margin-top: 0.8rem !important;
+        }
+
+        .bn-side-menu button {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+
+        .bn-drag-handle-menu {
+          display: flex !important;
+          align-items: center !important;
+        }
       `}</style>
       <div
         style={{
