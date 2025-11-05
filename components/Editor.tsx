@@ -163,7 +163,7 @@ export default function Editor() {
       style={{
         width: '100vw',
         height: '100vh',
-        background: '#faf8f3',
+        background: 'transparent',
         padding: '3rem',
         position: 'relative',
         overflow: 'auto'
@@ -195,6 +195,19 @@ export default function Editor() {
 
         .bn-container * {
           font-family: 'Crimson Text', serif !important;
+        }
+
+        /* Fix checkbox vertical alignment */
+        .bn-container [data-content-type="checkListItem"] {
+          display: flex !important;
+          align-items: center !important;
+        }
+
+        .bn-container [data-content-type="checkListItem"] input[type="checkbox"] {
+          margin-top: 0 !important;
+          margin-right: 0.5rem !important;
+          flex-shrink: 0 !important;
+          transform: translateY(0) !important;
         }
       `}</style>
       <div

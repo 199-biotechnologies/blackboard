@@ -6,11 +6,12 @@
 
 html, body {
   height: 100%;
-  background: #f5f1e8;
+  background: transparent;
 }
 
 body {
   overflow: hidden;
+  background: transparent;
 }
 
 [contenteditable][data-placeholder]:empty:before {
